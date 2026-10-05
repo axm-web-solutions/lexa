@@ -1,112 +1,20 @@
 'use client'
 
-import { CookiesConsent, LegalFooter } from '@/components/legal-info'
+import { CookiesConsent, LegalDocId, LegalFooter, LegalDocModal } from '@/components/legal-info'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUpRight, BookOpen, CalendarDays, Check, CheckCircle2, ChevronRight, CircleHelp, Clock, DollarSign, FileText, Gavel, LockKeyhole, Menu, Phone, Scale, ShieldCheck, Sparkles, User, Volume2, VolumeX, X } from 'lucide-react'
+import { ArrowUpRight, BookOpen, CalendarDays, Check, CheckCircle2, ChevronRight, CircleHelp, Clock, DollarSign, FileText, Gavel, Globe, LockKeyhole, Menu, Phone, Scale, ShieldCheck, Sparkles, User, Volume2, VolumeX, X } from 'lucide-react'
 import Image from 'next/image'
 import { useCallback, useEffect, useRef, useState } from 'react'
-
-// ——— Tipos de caso para cotización ———
-const CASE_TYPES = [
-  { value: 'penal', label: 'Derecho Penal', price: 'Desde $150.000' },
-  { value: 'civil', label: 'Derecho Civil', price: 'Desde $120.000' },
-  { value: 'laboral', label: 'Derecho Laboral', price: 'Desde $130.000' },
-  { value: 'familia', label: 'Derecho de Familia', price: 'Desde $100.000' },
-  { value: 'inmobiliario', label: 'Derecho Inmobiliario', price: 'Desde $140.000' },
-  { value: 'sucesiones', label: 'Sucesiones y Herencias', price: 'Desde $110.000' },
-  { value: 'empresarial', label: 'Derecho Empresarial', price: 'Desde $200.000' },
-  { value: 'otro', label: 'Otro / No sé', price: 'A consultar' },
-]
+import { Language, translations } from '@/lib/i18n'
+import { detectDefaultRegion, formatCurrency, REGIONS, RegionCode } from '@/lib/pricing'
+import { dictionary, fallbackAnswersByLang } from '@/lib/dictionary'
 
 // Horarios disponibles
 const TIME_SLOTS = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00']
 
-type ApptForm = { name: string; phone: string; date: string; time: string; reason: string }
-type QuoteForm = { name: string; phone: string; caseType: string; description: string; urgency: string }
+type ApptForm = { name: string; phone: string; date: string; time: string; reason: string; consent: boolean }
+type QuoteForm = { name: string; phone: string; caseType: string; description: string; urgency: string; consent: boolean }
 type FormStatus = 'idle' | 'sending' | 'done'
-
-// ——— Diccionario jurídico ampliado con respuestas humanas ———
-const dictionary = [
-  {
-    keywords: ['fotos', 'imagen', 'publicar', 'sin consentimiento', 'foto mía'],
-    title: 'Uso no autorizado de imagen',
-    answer: 'Entiendo lo difícil que puede ser esta situación. Que alguien publique fotos tuyas sin tu permiso vulnera directamente tu derecho a la imagen y a la intimidad, protegido en casi todos los ordenamientos jurídicos latinoamericanos. Lo primero que debes hacer es hacer capturas de pantalla con fecha y hora visible, guardar los enlaces exactos y, si hay mensajes relacionados, conservarlos también. Luego envía una solicitud escrita al usuario o a la plataforma para que retire el contenido. Si la persona se niega o el contenido es íntimo, esto puede constituir un delito. En ese caso, es fundamental que acudas a las autoridades con toda la evidencia reunida. ¿Quieres que te oriente sobre cómo proceder en un país específico?',
-    area: 'Privacidad · Derecho Penal'
-  },
-  {
-    keywords: ['amenaza', 'amenazas', 'intimidación', 'me está amenazando'],
-    title: 'Amenazas e intimidación',
-    answer: 'Esto es serio y quiero que lo tomes con la calma que merece pero también con la firmeza necesaria. Las amenazas son un delito cuando anuncian un daño serio, creíble e inminente. Lo más importante ahora mismo: guarda todos los mensajes, audios o capturas con fecha y hora, apunta los números de teléfono o usuarios involucrados, y si hay testigos, anótalos. Evita responder con agresividad; eso puede complicar tu posición. Una vez tengas todo documentado, preséntate a la autoridad competente —policía o fiscalía según tu país— y lleva toda la evidencia. No esperes a que la situación escale. ¿Tienes ya alguna documentación reunida?',
-    area: 'Derecho Penal · Seguridad'
-  },
-  {
-    keywords: ['contrato', 'incumplimiento', 'no me pagaron', 'no cumplió'],
-    title: 'Incumplimiento de contrato',
-    answer: 'Comprendo tu frustración; un incumplimiento contractual puede generar no solo pérdidas económicas sino también mucho estrés. El primer paso es revisar con cuidado el contrato: ¿qué obligaciones establecía cada parte?, ¿había fechas límite?, ¿existe alguna cláusula de penalización por incumplimiento? Una vez claro eso, reúne todos los comprobantes de pago, correos, mensajes y comunicaciones que prueban que tú cumpliste tu parte. Luego envía un requerimiento formal y por escrito dando un plazo razonable para que la otra parte cumpla. Si persiste el incumplimiento, tendrás una base sólida para una demanda civil. La jurisdicción y el tipo de contrato cambian la estrategia, así que si quieres profundizar, dime más detalles.',
-    area: 'Derecho Civil · Contratos'
-  },
-  {
-    keywords: ['despido', 'me despidieron', 'trabajo', 'laboral', 'empleador'],
-    title: 'Despido y derechos laborales',
-    answer: 'Entiendo que perder el trabajo de forma inesperada es muy difícil, tanto emocionalmente como económicamente. Lo que debes saber primero es si el despido fue con justa causa o sin ella, porque eso cambia completamente tus derechos. Si no te dieron una causa válida por escrito o la causa no está contemplada en la ley laboral de tu país, probablemente tengas derecho a indemnización. Revisa tu contrato y guarda todo: carta de despido, liquidación, mensajes y cualquier comunicación con el empleador. También es importante que reclames tus prestaciones completas —vacaciones pendientes, primas, cesantías según aplique— dentro de los plazos legales. ¿Tienes el documento de despido? Eso me ayuda a orientarte mejor.',
-    area: 'Derecho Laboral'
-  },
-  {
-    keywords: ['divorcio', 'separación', 'matrimonio', 'me quiero separar'],
-    title: 'Divorcio y separación',
-    answer: 'Es una decisión difícil y entiendo que quieras entender bien tus opciones antes de dar cualquier paso. En términos generales, hay dos tipos de divorcio: el de mutuo acuerdo, que es más rápido y menos costoso cuando ambas partes están de acuerdo en los términos; y el contencioso, cuando no hay acuerdo sobre hijos, bienes o alimentos. Lo más urgente es que identifiques si tienen bienes en común, si hay hijos menores y qué régimen económico rige su matrimonio. Con esa información, un abogado puede trazar el camino más conveniente. ¿Hay hijos o bienes que necesiten ser repartidos? Eso define bastante el proceso.',
-    area: 'Derecho de Familia'
-  },
-  {
-    keywords: ['herencia', 'testamento', 'sucesión', 'bienes de un familiar'],
-    title: 'Herencia y sucesión',
-    answer: 'Los temas de herencia suelen surgir en momentos de mucho dolor, y entiendo que quieras claridad. Si el fallecido dejó testamento válido, el proceso de sucesión sigue lo que en él se establece, respetando siempre las porciones que la ley reserva a los herederos forzosos —hijos, cónyuge y a veces padres. Sin testamento, entra la sucesión intestada: la ley determina quién hereda y en qué proporción. En cualquier caso, el proceso requiere un trámite notarial o judicial para transferir los bienes. Reúne el registro de defunción, los títulos de propiedad o cuentas existentes, y los documentos que acrediten el parentesco. ¿Hay testamento o no lo hay en este caso?',
-    area: 'Derecho Sucesorio'
-  },
-  {
-    keywords: ['acoso', 'hostigamiento', 'me acosan', 'bullying', 'matoneo'],
-    title: 'Acoso y hostigamiento',
-    answer: 'Lo que describes es una situación que merece atención inmediata y no debes enfrentarla solo. El acoso —ya sea laboral, escolar o en redes sociales— tiene consecuencias legales para quien lo ejerce. Lo más importante ahora mismo es documentar todo: guarda capturas, mensajes, correos y cualquier evidencia con fecha. Si ocurre en un entorno laboral, debes presentar una queja formal ante recursos humanos o, si no hay respuesta, ante la autoridad laboral competente. Si es en un contexto escolar, la dirección del centro y los padres deben ser informados, y en casos graves la policía. No minimices lo que sientes ni lo que estás viviendo. ¿Dónde está ocurriendo el acoso?',
-    area: 'Derecho Penal · Laboral'
-  },
-  {
-    keywords: ['accidente', 'choque', 'tránsito', 'atropello', 'colisión'],
-    title: 'Accidente de tránsito',
-    answer: 'Espero que estés bien. Después de un accidente de tránsito, los primeros pasos son fundamentales. Primero, asegúrate de que todos estén a salvo y llama a emergencias si hay heridos. Luego llama a la policía de tránsito —aunque el accidente parezca menor— porque el informe oficial es clave para cualquier reclamación. Fotografía la escena, los daños a los vehículos, las placas y cualquier señal relevante. Recaba los datos del otro conductor: nombre, cédula, placa, seguro. No firmes ningún documento ni aceptes acuerdos en el lugar sin leerlos con calma. ¿El accidente fue hoy o ya pasó un tiempo?',
-    area: 'Derecho Civil · Seguros'
-  },
-  {
-    keywords: ['deuda', 'cobro', 'deudor', 'me deben dinero', 'préstamo'],
-    title: 'Cobro de deudas',
-    answer: 'Entiendo lo frustrante que es tener dinero prestado que no te devuelven. Si hay un pagaré, contrato o comprobante de la deuda, estás en una posición mucho más fuerte legalmente. Con eso puedes iniciar un proceso ejecutivo civil para reclamar el pago de forma judicial. Si no hay documento formal, aun así hay opciones: mensajes, transferencias bancarias o testigos pueden servir como prueba. El primer paso recomendado es siempre una carta formal de cobro dando un plazo de 10 a 15 días; esto crea un registro y a veces resuelve el problema sin necesidad de ir a tribunales. ¿Tienes algún documento que respalde la deuda?',
-    area: 'Derecho Civil · Financiero'
-  },
-  {
-    keywords: ['robo', 'hurto', 'me robaron', 'me quitaron', 'ladrón'],
-    title: 'Robo o hurto',
-    answer: 'Lamento mucho que hayas pasado por eso. Lo primero y más urgente es presentar la denuncia ante la policía o fiscalía lo antes posible —dentro de las primeras horas si es posible, ya que esto facilita la investigación. Describe con detalle lo que ocurrió: hora, lugar, descripción del autor si lo viste, bienes sustraídos con su valor aproximado. Guarda cualquier prueba: cámaras cercanas, testigos, recibos de los bienes robados. Si fue con violencia o amenaza de arma, el delito es más grave y la penalidad para el autor es mayor. Para el seguro, si tienes, el reporte policial es indispensable. ¿Ya presentaste la denuncia?',
-    area: 'Derecho Penal'
-  },
-  {
-    keywords: ['arrendamiento', 'arrendador', 'inquilino', 'alquiler', 'arriendo'],
-    title: 'Arrendamiento e inquilinato',
-    answer: 'Los conflictos entre arrendadores e inquilinos son muy comunes y tienen un marco legal claro en la mayoría de países. Si eres inquilino y te quieren sacar sin seguir el procedimiento legal, tienes derechos: generalmente el arrendador debe darte un preaviso por escrito con un tiempo mínimo establecido por ley y solo puede pedirte que salgas por causas justificadas. Si eres arrendador y el inquilino no paga o daña el inmueble, existe el proceso de restitución de inmueble. En cualquier caso, revisa el contrato de arrendamiento —su vigencia, causales de terminación y obligaciones— porque es el documento base. ¿Eres tú el arrendador o el inquilino?',
-    area: 'Derecho Civil · Inmobiliario'
-  },
-  {
-    keywords: ['violencia', 'maltrato', 'golpes', 'violencia doméstica', 'agresión'],
-    title: 'Violencia doméstica o familiar',
-    answer: 'Ante todo quiero que sepas que lo que describes es inaceptable y que tienes derechos que te protegen. La violencia doméstica es un delito en todos los países de la región y existen mecanismos legales diseñados para protegerte. Lo primero es tu seguridad: si estás en peligro inmediato, llama a la línea de emergencias. Si puedes, busca atención médica y pide que quede constancia de las lesiones. Luego denuncia ante la fiscalía, comisaría de familia o autoridad competente según tu país; allí pueden dictar medidas de protección —como orden de alejamiento— de forma rápida. No estás solo o sola en esto. ¿Estás en un lugar seguro ahora mismo?',
-    area: 'Derecho Penal · Familia'
-  },
-]
-
-// Respuestas de fallback cuando no hay coincidencia de keywords
-const fallbackAnswers = [
-  'Entiendo que tu situación es importante y merece una respuesta adecuada. Para orientarte con precisión, necesitaría un poco más de contexto sobre lo que está ocurriendo. ¿Puedes contarme más detalles? Por ejemplo: ¿qué pasó exactamente?, ¿hay documentos de por medio?, ¿cuándo ocurrió? Con esa información puedo darte una orientación mucho más útil.',
-  'Gracias por contarme tu caso. Esta situación puede tener varias aristas legales y quiero asegurarme de orientarte en la dirección correcta. Para hacerlo bien, cuéntame: ¿estás buscando reclamar algo, defenderte de algo o simplemente entender tus derechos? Mientras más detalles me das, mejor puedo ayudarte.',
-  'Tu consulta me parece relevante y quiero tomármela con la seriedad que merece. Para darte la orientación más precisa posible, ayúdame con más detalles: ¿en qué país estás? ¿Hay otras personas involucradas? ¿Ya tomaste alguna acción previa? Eso me permitirá orientarte de forma mucho más concreta.',
-]
 
 type Message = {
   id: number
@@ -117,8 +25,8 @@ type Message = {
 }
 type ChatPhase = 'idle' | 'thinking' | 'writing'
 
-// ——— Hook TTS (Web Speech API) ———
-function useSpeech() {
+// ——— Hook TTS Multilingüe (Web Speech API) ———
+function useSpeech(lang: Language) {
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
   const [speakingId, setSpeakingId] = useState<number | null>(null)
 
@@ -126,25 +34,22 @@ function useSpeech() {
     if (typeof window === 'undefined' || !window.speechSynthesis) return
     window.speechSynthesis.cancel()
     const utter = new SpeechSynthesisUtterance(text)
-    utter.lang = 'es-419'
+    utter.lang = lang === 'en' ? 'en-US' : 'es-CO'
     utter.rate = 0.95
     utter.pitch = 1.0
 
-    // Preferir voz en español
     const voices = window.speechSynthesis.getVoices()
-    const esVoice =
-      voices.find((v) => v.lang.startsWith('es') && v.lang.includes('419')) ||
-      voices.find((v) => v.lang.startsWith('es-MX')) ||
-      voices.find((v) => v.lang.startsWith('es-ES')) ||
-      voices.find((v) => v.lang.startsWith('es'))
-    if (esVoice) utter.voice = esVoice
+    const targetVoice = voices.find((v) =>
+      lang === 'en' ? v.lang.startsWith('en') : v.lang.startsWith('es')
+    )
+    if (targetVoice) utter.voice = targetVoice
 
     utter.onstart = () => setSpeakingId(id)
     utter.onend = () => setSpeakingId(null)
     utter.onerror = () => setSpeakingId(null)
     utteranceRef.current = utter
     window.speechSynthesis.speak(utter)
-  }, [])
+  }, [lang])
 
   const stop = useCallback(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -156,8 +61,8 @@ function useSpeech() {
   return { speak, stop, speakingId }
 }
 
-// ——— Componente foto abogado en hero ———
-function LawyerHeroPhoto() {
+function LawyerHeroPhoto({ lang }: { lang: Language }) {
+  const t = translations[lang]
   return (
     <motion.div
       className="lawyer-hero-photo"
@@ -168,7 +73,7 @@ function LawyerHeroPhoto() {
       <div className="lawyer-photo-frame">
         <Image
           src="/dr-alejandro-vargas.jpg"
-          alt="Dr. Alejandro Vargas — Abogado"
+          alt={t.character.name}
           width={340}
           height={340}
           className="lawyer-photo-img"
@@ -178,61 +83,83 @@ function LawyerHeroPhoto() {
       </div>
       <div className="lawyer-hero-badge">
         <span className="status-dot" />
-        <span>Disponible ahora</span>
+        <span>{t.character.status}</span>
       </div>
       <div className="lawyer-hero-name">
-        <strong>Dr. Alejandro Vargas</strong>
-        <span>Derecho Penal · Civil · Familia</span>
+        <strong>{t.character.name}</strong>
+        <span>{t.character.role}</span>
+        <small className="ai-character-tag"><Sparkles size={11} /> {t.character.disclaimerBadge}</small>
       </div>
     </motion.div>
   )
 }
 
 function App() {
+  const [lang, setLang] = useState<Language>('es')
+  const [regionCode, setRegionCode] = useState<RegionCode>('CO')
+  const t = translations[lang]
+
+  useEffect(() => {
+    const defaultReg = detectDefaultRegion(lang)
+    setRegionCode(defaultReg)
+  }, [lang])
+
   const [query, setQuery] = useState('')
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 0,
-      role: 'assistant',
-      text: 'Buen día, soy el Dr. Alejandro Vargas. Estoy aquí para orientarte en asuntos de derecho penal, civil, laboral y de familia. Cuéntame con confianza, ¿qué situación estás enfrentando?',
-      area: 'Orientación inicial',
-    },
-  ])
+  const [messages, setMessages] = useState<Message[]>([])
   const [used, setUsed] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [activeLegalDoc, setActiveLegalDoc] = useState<LegalDocId | null>(null)
+
+  // Set initial message according to language
+  useEffect(() => {
+    setMessages([
+      {
+        id: 0,
+        role: 'assistant',
+        text: t.chat.initialGreeting,
+        area: t.chat.areaInitial,
+      },
+    ])
+  }, [lang, t.chat.initialGreeting, t.chat.areaInitial])
 
   // Appointment form state
-  const [apptForm, setApptForm] = useState<ApptForm>({ name: '', phone: '', date: '', time: '', reason: '' })
+  const [apptForm, setApptForm] = useState<ApptForm>({ name: '', phone: '', date: '', time: '', reason: '', consent: false })
   const [apptStatus, setApptStatus] = useState<FormStatus>('idle')
 
   // Quote form state
-  const [quoteForm, setQuoteForm] = useState<QuoteForm>({ name: '', phone: '', caseType: '', description: '', urgency: 'normal' })
+  const [quoteForm, setQuoteForm] = useState<QuoteForm>({ name: '', phone: '', caseType: '', description: '', urgency: 'normal', consent: false })
   const [quoteStatus, setQuoteStatus] = useState<FormStatus>('idle')
   const [quotedPrice, setQuotedPrice] = useState('')
 
   const submitAppt = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!apptForm.name || !apptForm.phone || !apptForm.date || !apptForm.time) return
+    if (!apptForm.name || !apptForm.phone || !apptForm.date || !apptForm.time || !apptForm.consent) return
     setApptStatus('sending')
     setTimeout(() => setApptStatus('done'), 1800)
   }
 
   const submitQuote = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!quoteForm.name || !quoteForm.phone || !quoteForm.caseType) return
+    if (!quoteForm.name || !quoteForm.phone || !quoteForm.caseType || !quoteForm.consent) return
     setQuoteStatus('sending')
-    const found = CASE_TYPES.find(c => c.value === quoteForm.caseType)
-    const basePrice = found?.price ?? 'A consultar'
-    const urgencyMultiplier = quoteForm.urgency === 'urgent' ? ' (urgente +30%)' : quoteForm.urgency === 'express' ? ' (express +60%)' : ''
-    setQuotedPrice(basePrice + urgencyMultiplier)
+    const found = t.quote.caseTypes.find(c => c.value === quoteForm.caseType)
+    const baseVal = regionCode === 'CO' ? (found?.baseCOP ?? 0) : (found?.baseUSD ?? 0)
+    let finalAmount = baseVal
+    if (quoteForm.urgency === 'urgent') finalAmount = Math.round(baseVal * 1.3)
+    if (quoteForm.urgency === 'express') finalAmount = Math.round(baseVal * 1.6)
+
+    const formatted = baseVal > 0 ? formatCurrency(finalAmount, regionCode) : 'A consultar'
+    setQuotedPrice(formatted)
     setTimeout(() => setQuoteStatus('done'), 2000)
   }
+
   const [showPricing, setShowPricing] = useState(false)
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [phase, setPhase] = useState<ChatPhase>('idle')
   const timers = useRef<number[]>([])
   const chatBodyRef = useRef<HTMLDivElement>(null)
   const nextId = useRef(1)
-  const { speak, stop, speakingId } = useSpeech()
+  const { speak, stop, speakingId } = useSpeech(lang)
 
   const MAX_QUESTIONS = 7
 
@@ -243,22 +170,10 @@ function App() {
     if (node) node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' })
   }, [messages, phase])
 
-  // Resume videos
-  useEffect(() => {
-    const media = document.querySelector('.courtroom-media')
-    const clips = Array.from(media?.querySelectorAll('video') ?? []) as HTMLVideoElement[]
-    const resume = () => { clips.forEach((clip) => { if (clip.paused) void clip.play().catch(() => undefined) }) }
-    resume()
-    document.addEventListener('visibilitychange', resume)
-    window.addEventListener('focus', resume)
-    return () => { document.removeEventListener('visibilitychange', resume); window.removeEventListener('focus', resume) }
-  }, [])
-
   const queue = (callback: () => void, delay: number) => {
     timers.current.push(window.setTimeout(callback, delay))
   }
 
-  // Escritura por rachas
   const writeRacha = (full: string, start: number, msgId: number) => {
     const chunkSize = 10 + Math.random() * 14
     const end = Math.min(full.length, start + chunkSize)
@@ -288,14 +203,15 @@ function App() {
 
     const normalized = text.toLowerCase()
     const match = dictionary.find((entry) =>
-      entry.keywords.some((keyword) => normalized.includes(keyword))
+      entry.keywords[lang].some((keyword) => normalized.includes(keyword))
     )
 
+    const fallbackList = fallbackAnswersByLang[lang]
     const answer = match
-      ? match.answer
-      : fallbackAnswers[Math.floor(Math.random() * fallbackAnswers.length)]
+      ? match.answer[lang]
+      : fallbackList[Math.floor(Math.random() * fallbackList.length)]
 
-    const area = match?.area ?? 'Orientación general'
+    const area = match ? match.area[lang] : t.chat.areaGeneral
 
     const userMsgId = nextId.current++
     setMessages((current) => [...current, { id: userMsgId, role: 'user', text, area: '' }])
@@ -314,13 +230,24 @@ function App() {
   }
 
   const checkout = async () => {
-    const response = await fetch('/api/create-checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productId: 'lexa-plus-monthly' }),
-    })
-    const data = await response.json()
-    if (data.url) window.location.href = data.url
+    try {
+      setCheckoutLoading(true)
+      const response = await fetch('/api/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ regionCode }),
+      })
+      const data = await response.json()
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        alert(data.error || 'Error al iniciar checkout.')
+      }
+    } catch {
+      alert('Ocurrió un error al conectar con la pasarela de pago.')
+    } finally {
+      setCheckoutLoading(false)
+    }
   }
 
   const handleVoiceClick = (msg: Message) => {
@@ -334,26 +261,10 @@ function App() {
   return (
     <>
       <div className="courtroom-media" aria-hidden="true">
-        <video
-          className="courtroom-video video-judge"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          poster="/courtroom-poster-judge.jpg"
-        >
+        <video className="courtroom-video video-judge" autoPlay muted loop playsInline preload="auto" poster="/courtroom-poster-judge.jpg">
           <source src="/courtroom-judge.mp4" type="video/mp4" />
         </video>
-        <video
-          className="courtroom-video video-gavel"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          poster="/courtroom-poster.jpg"
-        >
+        <video className="courtroom-video video-gavel" autoPlay muted loop playsInline preload="auto" poster="/courtroom-poster.jpg">
           <source src="/courtroom-gavel.mp4" type="video/mp4" />
         </video>
         <div className="courtroom-grain" />
@@ -364,18 +275,42 @@ function App() {
         {/* ——— Navbar ——— */}
         <nav className="topbar">
           <a className="brand" href="#inicio">
-            <span className="brand-mark">
-              <Scale size={17} strokeWidth={1.5} />
-            </span>
-            <span>LEXA</span>
+            <span className="brand-mark"><Scale size={17} strokeWidth={1.5} /></span>
+            <span>{t.common.brand}</span>
           </a>
           <div className={`nav-links ${menuOpen ? 'open' : ''}`}>
-            <a href="#como-funciona">Cómo funciona</a>
-            <a href="#consulta">Consulta</a>
-            <a href="#agendar">Agendar cita</a>
-            <a href="#cotizacion">Cotización</a>
+            <a href="#como-funciona">{t.common.nav.howItWorks}</a>
+            <a href="#consulta">{t.common.nav.consultation}</a>
+            <a href="#agendar">{t.common.nav.appointment}</a>
+            <a href="#cotizacion">{t.common.nav.quote}</a>
+            
+            {/* Language & Region Selectors */}
+            <div className="i18n-selectors">
+              <button
+                type="button"
+                className="lang-toggle"
+                onClick={() => setLang(l => (l === 'es' ? 'en' : 'es'))}
+                title="Cambiar idioma / Change language"
+              >
+                <Globe size={13} />
+                <span>{lang.toUpperCase()}</span>
+              </button>
+              <select
+                className="region-select"
+                value={regionCode}
+                onChange={e => setRegionCode(e.target.value as RegionCode)}
+                aria-label="Seleccionar región / Moneda"
+              >
+                {Object.values(REGIONS).map(reg => (
+                  <option key={reg.code} value={reg.code}>
+                    {reg.code} ({reg.currency})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <button className="nav-cta" onClick={() => setShowPricing(true)}>
-              Ver planes <ArrowUpRight size={15} />
+              {t.common.nav.viewPlanes} <ArrowUpRight size={15} />
             </button>
           </div>
           <button className="menu-button" onClick={() => setMenuOpen(!menuOpen)} aria-label="Abrir menú">
@@ -387,55 +322,53 @@ function App() {
         <section className="hero" id="inicio">
           <div className="hero-copy">
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="eyebrow">
-              <span className="status-dot" /> Consultoría legal privada y personal
+              <span className="status-dot" /> {t.hero.eyebrow}
             </motion.div>
-            <motion.h1
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              Habla con tu<br />
-              <em>abogado ahora.</em>
+            <motion.h1 initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              {t.hero.title1}<br />
+              <em>{t.hero.title2}</em>
             </motion.h1>
-            <motion.p
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              El Dr. Alejandro Vargas te orienta de forma directa, en lenguaje claro, sin tecnicismos. Hasta 7 preguntas gratuitas. Respuestas escritas y en voz.
+            <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              {t.hero.subtitle}
             </motion.p>
             <div className="hero-actions">
               <a href="#consulta" className="primary-button">
-                Iniciar consulta <ChevronRight size={16} />
+                {t.hero.ctaPrimary} <ChevronRight size={16} />
               </a>
               <a href="#como-funciona" className="text-button">
-                Cómo funciona <ArrowUpRight size={15} />
+                {t.hero.ctaSecondary} <ArrowUpRight size={15} />
               </a>
             </div>
             <div className="trust-row">
-              <span><ShieldCheck size={15} /> Privado por diseño</span>
-              <span><BookOpen size={15} /> Respuestas en voz y texto</span>
+              <span><ShieldCheck size={15} /> {t.hero.trust1}</span>
+              <span><BookOpen size={15} /> {t.hero.trust2}</span>
             </div>
           </div>
-          <LawyerHeroPhoto />
+          <LawyerHeroPhoto lang={lang} />
         </section>
+
+        {/* ——— Disclaimer jurídico banner ——— */}
+        <div className="legal-banner-wrapper">
+          <div className="legal-banner">
+            <CircleHelp size={16} className="banner-icon" />
+            <p>{t.legalDisclaimer.bannerText}</p>
+          </div>
+        </div>
 
         {/* ——— Consulta ——— */}
         <section className="consultation" id="consulta">
-          <div className="section-label">01 / Tu consulta</div>
+          <div className="section-label">01 / {t.common.nav.consultation}</div>
           <div className="consultation-grid">
             <div className="intro-panel">
-              <p className="kicker">Habla con el Dr. Vargas</p>
+              <p className="kicker">{t.chat.kicker}</p>
               <h2>
-                Tu pregunta merece<br />
-                <span>una respuesta clara.</span>
+                {t.chat.heading1}<br />
+                <span>{t.chat.heading2}</span>
               </h2>
-              <p>
-                Describe los hechos con tus propias palabras. El Dr. Vargas te orienta sobre el camino legal más adecuado, sin tecnicismos y con empatía.
-              </p>
+              <p>{t.chat.subheading}</p>
               <div className="usage">
                 <div>
-                  <span>Consultas disponibles</span>
+                  <span>{t.chat.availableQueries}</span>
                   <strong>
                     {Math.max(0, MAX_QUESTIONS - used)} <small>/ {MAX_QUESTIONS}</small>
                   </strong>
@@ -445,18 +378,11 @@ function App() {
                 </div>
               </div>
 
-              {/* Foto del abogado en el panel */}
               <div className="lawyer-panel-photo">
-                <Image
-                  src="/dr-alejandro-vargas.jpg"
-                  alt="Dr. Alejandro Vargas"
-                  width={56}
-                  height={56}
-                  className="lawyer-panel-img"
-                />
+                <Image src="/dr-alejandro-vargas.jpg" alt={t.character.name} width={56} height={56} className="lawyer-panel-img" />
                 <div>
-                  <strong>Dr. Alejandro Vargas</strong>
-                  <span>Abogado litigante · 15 años de experiencia</span>
+                  <strong>{t.character.name}</strong>
+                  <span>{t.character.role}</span>
                 </div>
               </div>
             </div>
@@ -465,73 +391,44 @@ function App() {
             <div className="chat-card">
               <div className="chat-header">
                 <div className={`lawyer-avatar-wrap ${speakingId !== null ? 'speaking' : ''}`}>
-                  <Image
-                    src="/dr-alejandro-vargas.jpg"
-                    alt="Dr. Alejandro Vargas"
-                    width={38}
-                    height={38}
-                    className="lawyer-avatar-img"
-                  />
+                  <Image src="/dr-alejandro-vargas.jpg" alt={t.character.name} width={38} height={38} className="lawyer-avatar-img" />
                   {speakingId !== null && <span className="speaking-ring" />}
                 </div>
                 <div>
                   <strong>
-                    Dr. Alejandro Vargas <span className="online-dot" />
+                    {t.character.name} <span className="online-dot" />
                   </strong>
-                  <span>Abogado · En consulta</span>
+                  <span>{t.character.role}</span>
                 </div>
-                <span className="chat-lock">
-                  <LockKeyhole size={14} /> Sesión privada
-                </span>
+                <span className="chat-lock"><LockKeyhole size={14} /> {t.chat.sessionPrivate}</span>
               </div>
 
-              {/* Messages */}
               <div className="chat-body" ref={chatBodyRef}>
                 {messages.map((message) => (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    key={message.id}
-                    className={`message ${message.role === 'user' ? 'user-message' : ''}`}
-                  >
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} key={message.id} className={`message ${message.role === 'user' ? 'user-message' : ''}`}>
                     {message.role === 'assistant' && (
                       <div className="message-label">
-                        Dr. Vargas{' '}
-                        {message.area && <span>{message.area}</span>}
-                        {message.streaming && <span className="label-typing">escribiendo…</span>}
+                        {t.common.brand} {message.area && <span>{message.area}</span>}
+                        {message.streaming && <span className="label-typing">{t.chat.typingText}</span>}
                       </div>
                     )}
                     <p>
                       {message.text}
                       {message.streaming && <span className="caret" />}
                     </p>
-                    {/* Botón de voz — solo en mensajes del asistente que ya terminaron */}
                     {message.role === 'assistant' && !message.streaming && message.text && (
-                      <button
-                        className={`voice-btn ${speakingId === message.id ? 'is-speaking' : ''}`}
-                        onClick={() => handleVoiceClick(message)}
-                        aria-label={speakingId === message.id ? 'Detener audio' : 'Escuchar respuesta'}
-                        title={speakingId === message.id ? 'Detener' : 'Escuchar'}
-                      >
+                      <button className={`voice-btn ${speakingId === message.id ? 'is-speaking' : ''}`} onClick={() => handleVoiceClick(message)}>
                         {speakingId === message.id ? <VolumeX size={13} /> : <Volume2 size={13} />}
-                        <span>{speakingId === message.id ? 'Detener' : 'Escuchar'}</span>
+                        <span>{speakingId === message.id ? t.chat.stopBtn : t.chat.listenBtn}</span>
                       </button>
                     )}
                   </motion.div>
                 ))}
 
                 {phase === 'thinking' && (
-                  <motion.div
-                    className="message typing-message"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                  >
-                    <div className="message-label">
-                      Dr. Vargas <span>está pensando</span>
-                    </div>
-                    <div className="typing-dots" aria-label="El doctor está pensando">
-                      <i /><i /><i />
-                    </div>
+                  <motion.div className="message typing-message" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                    <div className="message-label">{t.common.brand} <span>{t.chat.thinkingText}</span></div>
+                    <div className="typing-dots"><i /><i /><i /></div>
                   </motion.div>
                 )}
 
@@ -539,103 +436,47 @@ function App() {
                   <button className="limit-card" onClick={() => setShowPricing(true)}>
                     <Sparkles size={16} />
                     <span>
-                      <strong>Has usado tus {MAX_QUESTIONS} consultas gratuitas.</strong>
-                      <small>Continúa con Lexa Plus para seguir conversando con el Dr. Vargas.</small>
+                      <strong>{t.chat.limitReachedTitle}</strong>
+                      <small>{t.chat.limitReachedSub}</small>
                     </span>
                     <ArrowUpRight size={16} />
                   </button>
                 )}
               </div>
 
-              {/* Composer */}
               <div className="composer">
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) ask()
-                  }}
-                  placeholder={
-                    phase === 'thinking'
-                      ? 'El Dr. Vargas está analizando tu caso…'
-                      : phase === 'writing'
-                        ? 'El Dr. Vargas te está respondiendo…'
-                        : 'Cuéntame tu situación...'
-                  }
-                  aria-label="Escribe tu consulta legal"
+                  onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) ask() }}
+                  placeholder={phase === 'thinking' ? t.chat.thinkingPlaceholder : phase === 'writing' ? t.chat.writingPlaceholder : t.chat.inputPlaceholder}
+                  aria-label={t.chat.inputPlaceholder}
                 />
-                <button
-                  onClick={() => ask()}
-                  disabled={phase !== 'idle'}
-                  className={phase !== 'idle' ? 'is-busy' : ''}
-                  aria-label="Enviar consulta"
-                >
+                <button onClick={() => ask()} disabled={phase !== 'idle'} className={phase !== 'idle' ? 'is-busy' : ''} aria-label={t.chat.sendBtn}>
                   <ArrowUpRight size={18} />
                 </button>
               </div>
               <div className="disclaimer">
-                <CircleHelp size={13} /> El Dr. Vargas ofrece orientación general y no sustituye la asesoría jurídica formal.
+                <CircleHelp size={13} /> {t.legalDisclaimer.chatbotFooter}
               </div>
             </div>
           </div>
         </section>
 
-        {/* ——— Cómo funciona ——— */}
-        <section className="principles" id="como-funciona">
-          <div className="section-label">02 / El método</div>
-          <div className="principles-heading">
-            <h2>
-              La claridad también<br />
-              <em>es una forma de justicia.</em>
-            </h2>
-            <p>
-              El Dr. Vargas te ayuda a entender tu situación antes de que des el siguiente paso. Sin promesas imposibles. Solo orientación honesta y directa.
-            </p>
-          </div>
-          <div className="principle-grid">
-            <article>
-              <span>01</span>
-              <Gavel />
-              <h3>Pregunta sin miedo</h3>
-              <p>Explica tu caso con tus palabras. No necesitas conocer los términos jurídicos.</p>
-            </article>
-            <article>
-              <span>02</span>
-              <BookOpen />
-              <h3>Respuesta humana</h3>
-              <p>El Dr. Vargas responde en texto y puedes escuchar su respuesta en voz con un clic.</p>
-            </article>
-            <article>
-              <span>03</span>
-              <ShieldCheck />
-              <h3>Da el siguiente paso</h3>
-              <p>Recibe una guía clara sobre qué hacer y cuándo buscar representación legal formal.</p>
-            </article>
-          </div>
-        </section>
-
-        {/* ——— Agendar cita ——— */}
+        {/* ——— Agendar cita presencial ——— */}
         <section className="booking-section" id="agendar">
-          <div className="section-label">03 / Cita presencial</div>
+          <div className="section-label">{t.booking.sectionLabel}</div>
           <div className="booking-grid">
             <div className="booking-info">
-              <p className="kicker">Agenda tu consulta</p>
-              <h2>
-                Una reunión cara a cara<br />
-                <em>marca la diferencia.</em>
-              </h2>
-              <p>
-                Algunos casos requieren más que una orientación digital. Agenda una sesión presencial con el Dr. Vargas en nuestro consultorio y recibe asesoría personalizada y estratégica.
-              </p>
+              <p className="kicker">{t.booking.kicker}</p>
+              <h2>{t.booking.heading1}<br /><em>{t.booking.heading2}</em></h2>
+              <p>{t.booking.description}</p>
               <ul className="booking-perks">
-                <li><CheckCircle2 size={15} /> Sesión de 60 minutos con el Dr. Vargas</li>
-                <li><CheckCircle2 size={15} /> Revisión de documentos en persona</li>
-                <li><CheckCircle2 size={15} /> Estrategia legal personalizada</li>
-                <li><CheckCircle2 size={15} /> Confidencialidad garantizada</li>
+                {t.booking.perks.map((p, i) => <li key={i}><CheckCircle2 size={15} /> {p}</li>)}
               </ul>
               <div className="booking-meta">
-                <span><Clock size={13} /> Lun–Vie, 9:00–17:00</span>
-                <span><Phone size={13} /> +57 300 123 4567</span>
+                <span><Clock size={13} /> {t.booking.schedule}</span>
+                <span><Phone size={13} /> {t.booking.phone}</span>
               </div>
             </div>
 
@@ -643,93 +484,58 @@ function App() {
               {apptStatus === 'done' ? (
                 <div className="form-success">
                   <div className="form-success-icon"><CalendarDays size={28} /></div>
-                  <h3>¡Cita agendada!</h3>
-                  <p>El Dr. Vargas te contactará a <strong>{apptForm.phone}</strong> dentro de las próximas 2 horas para confirmar tu cita del <strong>{apptForm.date}</strong> a las <strong>{apptForm.time}</strong>.</p>
-                  <button className="form-reset-btn" onClick={() => { setApptStatus('idle'); setApptForm({ name: '', phone: '', date: '', time: '', reason: '' }) }}>
-                    Agendar otra cita
+                  <h3>{t.booking.successTitle}</h3>
+                  <p>{t.booking.successMsg}</p>
+                  <button className="form-reset-btn" onClick={() => { setApptStatus('idle'); setApptForm({ name: '', phone: '', date: '', time: '', reason: '', consent: false }) }}>
+                    {t.booking.resetBtn}
                   </button>
                 </div>
               ) : (
                 <form className="booking-form" onSubmit={submitAppt} id="form-agendar">
-                  <div className="form-header">
-                    <CalendarDays size={16} />
-                    <span>Solicitar cita presencial</span>
-                  </div>
+                  <div className="form-header"><CalendarDays size={16} /><span>{t.booking.formTitle}</span></div>
 
                   <div className="form-row">
                     <div className="form-field">
-                      <label htmlFor="appt-name"><User size={12} /> Nombre completo</label>
-                      <input
-                        id="appt-name"
-                        type="text"
-                        placeholder="Tu nombre"
-                        value={apptForm.name}
-                        onChange={e => setApptForm(f => ({ ...f, name: e.target.value }))}
-                        required
-                      />
+                      <label htmlFor="appt-name"><User size={12} /> {t.booking.nameLabel}</label>
+                      <input id="appt-name" type="text" placeholder={t.booking.namePlaceholder} value={apptForm.name} onChange={e => setApptForm(f => ({ ...f, name: e.target.value }))} required />
                     </div>
                     <div className="form-field">
-                      <label htmlFor="appt-phone"><Phone size={12} /> Teléfono / WhatsApp</label>
-                      <input
-                        id="appt-phone"
-                        type="tel"
-                        placeholder="+57 300 000 0000"
-                        value={apptForm.phone}
-                        onChange={e => setApptForm(f => ({ ...f, phone: e.target.value }))}
-                        required
-                      />
+                      <label htmlFor="appt-phone"><Phone size={12} /> {t.booking.phoneLabel}</label>
+                      <input id="appt-phone" type="tel" placeholder={t.booking.phonePlaceholder} value={apptForm.phone} onChange={e => setApptForm(f => ({ ...f, phone: e.target.value }))} required />
                     </div>
                   </div>
 
                   <div className="form-row">
                     <div className="form-field">
-                      <label htmlFor="appt-date"><CalendarDays size={12} /> Fecha preferida</label>
-                      <input
-                        id="appt-date"
-                        type="date"
-                        min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
-                        value={apptForm.date}
-                        onChange={e => setApptForm(f => ({ ...f, date: e.target.value }))}
-                        required
-                      />
+                      <label htmlFor="appt-date"><CalendarDays size={12} /> {t.booking.dateLabel}</label>
+                      <input id="appt-date" type="date" min={new Date(Date.now() + 86400000).toISOString().split('T')[0]} value={apptForm.date} onChange={e => setApptForm(f => ({ ...f, date: e.target.value }))} required />
                     </div>
                     <div className="form-field">
-                      <label htmlFor="appt-time"><Clock size={12} /> Hora preferida</label>
-                      <select
-                        id="appt-time"
-                        value={apptForm.time}
-                        onChange={e => setApptForm(f => ({ ...f, time: e.target.value }))}
-                        required
-                      >
-                        <option value="">Selecciona hora</option>
-                        {TIME_SLOTS.map(t => <option key={t} value={t}>{t} hrs</option>)}
+                      <label htmlFor="appt-time"><Clock size={12} /> {t.booking.timeLabel}</label>
+                      <select id="appt-time" value={apptForm.time} onChange={e => setApptForm(f => ({ ...f, time: e.target.value }))} required>
+                        <option value="">{t.booking.timeDefault}</option>
+                        {TIME_SLOTS.map(slot => <option key={slot} value={slot}>{slot} hrs</option>)}
                       </select>
                     </div>
                   </div>
 
                   <div className="form-field">
-                    <label htmlFor="appt-reason"><FileText size={12} /> Motivo de la consulta (opcional)</label>
-                    <textarea
-                      id="appt-reason"
-                      placeholder="Describe brevemente el tema que necesitas tratar..."
-                      rows={3}
-                      value={apptForm.reason}
-                      onChange={e => setApptForm(f => ({ ...f, reason: e.target.value }))}
-                    />
+                    <label htmlFor="appt-reason"><FileText size={12} /> {t.booking.reasonLabel}</label>
+                    <textarea id="appt-reason" placeholder={t.booking.reasonPlaceholder} rows={3} value={apptForm.reason} onChange={e => setApptForm(f => ({ ...f, reason: e.target.value }))} />
                   </div>
 
-                  <button
-                    type="submit"
-                    className={`form-submit-btn ${apptStatus === 'sending' ? 'is-loading' : ''}`}
-                    disabled={apptStatus === 'sending'}
-                  >
-                    {apptStatus === 'sending' ? (
-                      <><span className="btn-spinner" /> Agendando…</>
-                    ) : (
-                      <>Solicitar cita <ArrowUpRight size={16} /></>
-                    )}
+                  {/* Consent Checkbox */}
+                  <div className="consent-checkbox-wrap">
+                    <label htmlFor="appt-consent" className="consent-label">
+                      <input id="appt-consent" type="checkbox" checked={apptForm.consent} onChange={e => setApptForm(f => ({ ...f, consent: e.target.checked }))} required />
+                      <span>{t.legalDisclaimer.consentCheck} <button type="button" className="inline-legal-link" onClick={() => setActiveLegalDoc('tratamiento')}>{t.legalDisclaimer.dataPolicyLink}</button>.</span>
+                    </label>
+                  </div>
+
+                  <button type="submit" className={`form-submit-btn ${apptStatus === 'sending' ? 'is-loading' : ''}`} disabled={apptStatus === 'sending' || !apptForm.consent}>
+                    {apptStatus === 'sending' ? t.booking.submittingBtn : <>{t.booking.submitBtn} <ArrowUpRight size={16} /></>}
                   </button>
-                  <p className="form-note"><LockKeyhole size={11} /> Tus datos son confidenciales y nunca serán compartidos.</p>
+                  <p className="form-note"><LockKeyhole size={11} /> {t.booking.privacyNote}</p>
                 </form>
               )}
             </div>
@@ -738,88 +544,55 @@ function App() {
 
         {/* ——— Cotización ——— */}
         <section className="quote-section" id="cotizacion">
-          <div className="section-label">04 / Cotización</div>
+          <div className="section-label">{t.quote.sectionLabel}</div>
           <div className="quote-grid">
             <div className="quote-form-card">
               {quoteStatus === 'done' ? (
                 <div className="form-success">
                   <div className="form-success-icon quote-success-icon"><DollarSign size={28} /></div>
-                  <h3>¡Cotización generada!</h3>
+                  <h3>{t.quote.successTitle}</h3>
                   <div className="quote-result">
-                    <span className="quote-result-label">Estimado para tu caso</span>
+                    <span className="quote-result-label">{t.quote.successPriceLabel}</span>
                     <span className="quote-result-price">{quotedPrice}</span>
                   </div>
-                  <p>El Dr. Vargas te enviará una cotización detallada a <strong>{quoteForm.phone}</strong> en máximo 24 horas hábiles. Este valor es una estimación; el costo final puede variar según la complejidad del caso.</p>
-                  <button className="form-reset-btn" onClick={() => { setQuoteStatus('idle'); setQuoteForm({ name: '', phone: '', caseType: '', description: '', urgency: 'normal' }) }}>
-                    Nueva cotización
+                  <p>{t.quote.successMsg}</p>
+                  <button className="form-reset-btn" onClick={() => { setQuoteStatus('idle'); setQuoteForm({ name: '', phone: '', caseType: '', description: '', urgency: 'normal', consent: false }) }}>
+                    {t.quote.resetBtn}
                   </button>
                 </div>
               ) : (
                 <form className="booking-form" onSubmit={submitQuote} id="form-cotizacion">
-                  <div className="form-header">
-                    <DollarSign size={16} />
-                    <span>Solicitar cotización</span>
-                  </div>
+                  <div className="form-header"><DollarSign size={16} /><span>{t.quote.formTitle}</span></div>
 
                   <div className="form-row">
                     <div className="form-field">
-                      <label htmlFor="quote-name"><User size={12} /> Nombre completo</label>
-                      <input
-                        id="quote-name"
-                        type="text"
-                        placeholder="Tu nombre"
-                        value={quoteForm.name}
-                        onChange={e => setQuoteForm(f => ({ ...f, name: e.target.value }))}
-                        required
-                      />
+                      <label htmlFor="quote-name"><User size={12} /> {t.quote.nameLabel}</label>
+                      <input id="quote-name" type="text" placeholder={t.quote.namePlaceholder} value={quoteForm.name} onChange={e => setQuoteForm(f => ({ ...f, name: e.target.value }))} required />
                     </div>
                     <div className="form-field">
-                      <label htmlFor="quote-phone"><Phone size={12} /> Teléfono / WhatsApp</label>
-                      <input
-                        id="quote-phone"
-                        type="tel"
-                        placeholder="+57 300 000 0000"
-                        value={quoteForm.phone}
-                        onChange={e => setQuoteForm(f => ({ ...f, phone: e.target.value }))}
-                        required
-                      />
+                      <label htmlFor="quote-phone"><Phone size={12} /> {t.quote.phoneLabel}</label>
+                      <input id="quote-phone" type="tel" placeholder={t.quote.phonePlaceholder} value={quoteForm.phone} onChange={e => setQuoteForm(f => ({ ...f, phone: e.target.value }))} required />
                     </div>
                   </div>
 
                   <div className="form-field">
-                    <label htmlFor="quote-type"><Scale size={12} /> Tipo de caso</label>
-                    <select
-                      id="quote-type"
-                      value={quoteForm.caseType}
-                      onChange={e => setQuoteForm(f => ({ ...f, caseType: e.target.value }))}
-                      required
-                    >
-                      <option value="">Selecciona el área legal</option>
-                      {CASE_TYPES.map(c => (
-                        <option key={c.value} value={c.value}>{c.label} — {c.price}</option>
-                      ))}
+                    <label htmlFor="quote-type"><Scale size={12} /> {t.quote.caseTypeLabel}</label>
+                    <select id="quote-type" value={quoteForm.caseType} onChange={e => setQuoteForm(f => ({ ...f, caseType: e.target.value }))} required>
+                      <option value="">{t.quote.caseTypeDefault}</option>
+                      {t.quote.caseTypes.map(c => {
+                        const priceVal = regionCode === 'CO' ? c.baseCOP : c.baseUSD
+                        const formatted = priceVal > 0 ? formatCurrency(priceVal, regionCode) : 'A consultar'
+                        return <option key={c.value} value={c.value}>{c.label} — {formatted}</option>
+                      })}
                     </select>
                   </div>
 
                   <div className="form-field">
-                    <label><Clock size={12} /> Urgencia del caso</label>
+                    <label><Clock size={12} /> {t.quote.urgencyLabel}</label>
                     <div className="urgency-options">
-                      {[
-                        { value: 'normal', label: 'Normal', sub: '5–10 días hábiles' },
-                        { value: 'urgent', label: 'Urgente', sub: '2–3 días (+30%)' },
-                        { value: 'express', label: 'Express', sub: '24 horas (+60%)' },
-                      ].map(opt => (
-                        <label
-                          key={opt.value}
-                          className={`urgency-opt ${quoteForm.urgency === opt.value ? 'selected' : ''}`}
-                        >
-                          <input
-                            type="radio"
-                            name="urgency"
-                            value={opt.value}
-                            checked={quoteForm.urgency === opt.value}
-                            onChange={e => setQuoteForm(f => ({ ...f, urgency: e.target.value }))}
-                          />
+                      {t.quote.urgencyOpts.map(opt => (
+                        <label key={opt.value} className={`urgency-opt ${quoteForm.urgency === opt.value ? 'selected' : ''}`}>
+                          <input type="radio" name="urgency" value={opt.value} checked={quoteForm.urgency === opt.value} onChange={e => setQuoteForm(f => ({ ...f, urgency: e.target.value }))} />
                           <span className="urgency-label">{opt.label}</span>
                           <span className="urgency-sub">{opt.sub}</span>
                         </label>
@@ -828,137 +601,110 @@ function App() {
                   </div>
 
                   <div className="form-field">
-                    <label htmlFor="quote-desc"><FileText size={12} /> Descripción del caso</label>
-                    <textarea
-                      id="quote-desc"
-                      placeholder="Cuéntanos los detalles más importantes de tu situación para darte una cotización más precisa..."
-                      rows={4}
-                      value={quoteForm.description}
-                      onChange={e => setQuoteForm(f => ({ ...f, description: e.target.value }))}
-                    />
+                    <label htmlFor="quote-desc"><FileText size={12} /> {t.quote.descLabel}</label>
+                    <textarea id="quote-desc" placeholder={t.quote.descPlaceholder} rows={4} value={quoteForm.description} onChange={e => setQuoteForm(f => ({ ...f, description: e.target.value }))} />
                   </div>
 
-                  <button
-                    type="submit"
-                    className={`form-submit-btn ${quoteStatus === 'sending' ? 'is-loading' : ''}`}
-                    disabled={quoteStatus === 'sending'}
-                  >
-                    {quoteStatus === 'sending' ? (
-                      <><span className="btn-spinner" /> Calculando cotización…</>
-                    ) : (
-                      <>Solicitar cotización <ArrowUpRight size={16} /></>
-                    )}
+                  {/* Consent Checkbox */}
+                  <div className="consent-checkbox-wrap">
+                    <label htmlFor="quote-consent" className="consent-label">
+                      <input id="quote-consent" type="checkbox" checked={quoteForm.consent} onChange={e => setQuoteForm(f => ({ ...f, consent: e.target.checked }))} required />
+                      <span>{t.legalDisclaimer.consentCheck} <button type="button" className="inline-legal-link" onClick={() => setActiveLegalDoc('tratamiento')}>{t.legalDisclaimer.dataPolicyLink}</button>.</span>
+                    </label>
+                  </div>
+
+                  <button type="submit" className={`form-submit-btn ${quoteStatus === 'sending' ? 'is-loading' : ''}`} disabled={quoteStatus === 'sending' || !quoteForm.consent}>
+                    {quoteStatus === 'sending' ? t.quote.submittingBtn : <>{t.quote.submitBtn} <ArrowUpRight size={16} /></>}
                   </button>
-                  <p className="form-note"><LockKeyhole size={11} /> Cotización sin compromiso · Sin costo</p>
+                  <p className="form-note"><LockKeyhole size={11} /> {t.quote.freeNote}</p>
                 </form>
               )}
             </div>
 
             <div className="quote-info">
-              <p className="kicker">Transparencia de precios</p>
-              <h2>
-                Conoce el costo<br />
-                <em>antes de decidir.</em>
-              </h2>
-              <p>
-                Creemos en la transparencia. Antes de comprometerte, recibe una estimación clara y honesta del costo de tu caso. Sin sorpresas.
-              </p>
+              <p className="kicker">{t.quote.transparencyTitle}</p>
+              <h2>{t.quote.heading1}<br /><em>{t.quote.heading2}</em></h2>
+              <p>{t.quote.transparencyDesc}</p>
               <div className="price-table">
-                {CASE_TYPES.filter(c => c.value !== 'otro').map(c => (
-                  <div key={c.value} className="price-row">
-                    <span>{c.label}</span>
-                    <strong>{c.price}</strong>
-                  </div>
-                ))}
+                {t.quote.caseTypes.filter(c => c.value !== 'otro').map(c => {
+                  const val = regionCode === 'CO' ? c.baseCOP : c.baseUSD
+                  return (
+                    <div key={c.value} className="price-row">
+                      <span>{c.label}</span>
+                      <strong>{formatCurrency(val, regionCode)}</strong>
+                    </div>
+                  )
+                })}
               </div>
-              <p className="price-disclaimer"><CircleHelp size={12} /> Los precios son estimados en COP. El costo final se determina tras evaluar la complejidad del caso.</p>
+              <p className="price-disclaimer"><CircleHelp size={12} /> {t.quote.disclaimer}</p>
             </div>
           </div>
         </section>
 
-        {/* ——— Footer note ——— */}
-        <section className="footer-note" id="privacidad">
-          <div>
-            <p className="kicker">Una orientación, no un sustituto</p>
-            <h2>
-              Cuando necesites estrategia,<br />
-              <em>habla con un abogado.</em>
-            </h2>
-          </div>
-          <p>
-            El Dr. Vargas te ayuda a llegar mejor preparado a una consulta profesional. Esta sesión no almacena tus preguntas y no constituye una relación abogado-cliente.
-          </p>
-        </section>
-
-        {/* ——— Modal de precios ——— */}
+        {/* ——— Rediseño Modal de cobro (Checkout Modal) ——— */}
         <AnimatePresence>
           {showPricing && (
-            <motion.div
-              className="modal-backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowPricing(false)}
-            >
-              <motion.div
-                className="pricing-modal"
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 18 }}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <button className="close-modal" onClick={() => setShowPricing(false)} aria-label="Cerrar">
+            <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowPricing(false)}>
+              <motion.div className="pricing-modal premium-checkout-modal" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 18 }} onClick={(event) => event.stopPropagation()}>
+                <button className="close-modal" onClick={() => setShowPricing(false)} aria-label={t.checkoutModal.close}>
                   <X />
                 </button>
 
-                <div className="pricing-lawyer-head">
-                  <Image
-                    src="/dr-alejandro-vargas.jpg"
-                    alt="Dr. Alejandro Vargas"
-                    width={52}
-                    height={52}
-                    className="pricing-lawyer-img"
-                  />
-                  <div>
-                    <strong>Dr. Alejandro Vargas</strong>
-                    <span>Consultas ilimitadas con Lexa Plus</span>
+                <div className="modal-top-header">
+                  <div className="pricing-lawyer-head">
+                    <Image src="/dr-alejandro-vargas.jpg" alt={t.character.name} width={52} height={52} className="pricing-lawyer-img" />
+                    <div>
+                      <strong>{t.character.name}</strong>
+                      <span>{t.common.brand} — {t.checkoutModal.eyebrow}</span>
+                    </div>
                   </div>
                 </div>
 
-                <span className="eyebrow">
-                  <Sparkles size={13} /> LEXA PLUS
-                </span>
-                <h2>
-                  Más claridad,<br />
-                  <em>cuando la necesitas.</em>
-                </h2>
-                <p>
-                  Continúa conversando con el Dr. Vargas con orientación ilimitada y acceso a todo el criterio jurídico.
-                </p>
-                <div className="price">
-                  <strong>$14.99</strong>
-                  <span>USD / mes</span>
+                <div className="modal-body-content">
+                  <span className="eyebrow"><Sparkles size={13} /> {t.checkoutModal.eyebrow}</span>
+                  <h2>{t.checkoutModal.title1}<br /><em>{t.checkoutModal.title2}</em></h2>
+                  <p>{t.checkoutModal.subtitle}</p>
+
+                  <div className="region-picker-box">
+                    <label>{t.checkoutModal.regionLabel}:</label>
+                    <select value={regionCode} onChange={e => setRegionCode(e.target.value as RegionCode)}>
+                      {Object.values(REGIONS).map(r => (
+                        <option key={r.code} value={r.code}>{r.countryName} — {r.priceFormatted}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="price-display-card">
+                    <div className="price">
+                      <strong>{formatCurrency(REGIONS[regionCode].monthlyPrice, regionCode)}</strong>
+                      <span>/ mes</span>
+                    </div>
+                    <p className="price-subtext">{t.checkoutModal.priceNote}</p>
+                  </div>
+
+                  <ul className="checkout-perks-list">
+                    {t.checkoutModal.perks.map((perk, idx) => (
+                      <li key={idx}><Check size={15} /> {perk}</li>
+                    ))}
+                  </ul>
+
+                  <button className="primary-button full checkout-cta-btn" onClick={checkout} disabled={checkoutLoading}>
+                    {checkoutLoading ? t.checkoutModal.processing : <>{t.checkoutModal.cta} <ArrowUpRight size={16} /></>}
+                  </button>
+                  <small className="secure-note"><LockKeyhole size={12} /> {t.checkoutModal.secureNote}</small>
                 </div>
-                <ul>
-                  <li><Check size={15} /> Consultas ilimitadas</li>
-                  <li><Check size={15} /> Respuestas en texto y en voz</li>
-                  <li><Check size={15} /> Temas ampliados: penal, civil, laboral, familia</li>
-                  <li><Check size={15} /> Cancela cuando quieras</li>
-                </ul>
-                <button className="primary-button full" onClick={checkout}>
-                  Continuar con Lexa Plus <ArrowUpRight size={16} />
-                </button>
-                <small className="secure-note">
-                  <LockKeyhole size={12} /> Pago seguro procesado por Stripe
-                </small>
               </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
       </main>
 
-      <LegalFooter />
-      <CookiesConsent />
+      <LegalFooter lang={lang} onOpenDoc={(doc) => setActiveLegalDoc(doc)} />
+      <CookiesConsent lang={lang} onOpenDoc={(doc) => setActiveLegalDoc(doc)} />
+
+      <AnimatePresence>
+        {activeLegalDoc && <LegalDocModal key={activeLegalDoc} doc={activeLegalDoc} lang={lang} onClose={() => setActiveLegalDoc(null)} />}
+      </AnimatePresence>
     </>
   )
 }

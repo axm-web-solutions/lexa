@@ -1748,6 +1748,17 @@ h2 {
   .urgency-options {
     grid-template-columns: 1fr;
   }
+
+  .i18n-selectors {
+    flex-direction: row;
+    justify-content: flex-start;
+  }
+
+  .premium-checkout-modal {
+    max-height: 90vh;
+    padding: 24px 20px;
+    width: 95%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1760,3 +1771,206 @@ h2 {
   .caret,
   .typing-dots i { animation: none; }
 }
+
+/* —— i18n Selectors & Tag de Personaje IA —— */
+.i18n-selectors {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lang-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lang-toggle:hover {
+  background: rgba(212, 175, 106, 0.15);
+  border-color: var(--gold);
+}
+
+.region-select {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+}
+
+.ai-character-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(212, 175, 106, 0.15);
+  color: var(--gold);
+  border: 1px solid rgba(212, 175, 106, 0.3);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+/* Banner de disclaimer legal */
+.legal-banner-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+.legal-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(212, 175, 106, 0.08);
+  border: 1px solid rgba(212, 175, 106, 0.25);
+  padding: 14px 20px;
+  border-radius: 12px;
+  color: #e2d9ca;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.legal-banner .banner-icon {
+  color: var(--gold);
+  flex-shrink: 0;
+}
+
+/* Consent checkboxes */
+.consent-checkbox-wrap {
+  margin: 12px 0 18px 0;
+}
+
+.consent-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.consent-label input[type="checkbox"] {
+  margin-top: 3px;
+  accent-color: var(--gold);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.inline-legal-link {
+  background: none;
+  border: none;
+  color: var(--gold);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+}
+
+/* Rediseño del Modal de Cobro (Payment Modal) */
+.premium-checkout-modal {
+  max-width: 520px;
+  background: #151311;
+  border: 1px solid rgba(212, 175, 106, 0.3);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75), 0 0 32px rgba(212, 175, 106, 0.1);
+  border-radius: 20px;
+  padding: 32px;
+  overflow-y: auto;
+  max-height: 85vh;
+}
+
+.modal-top-header {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+}
+
+.modal-body-content h2 {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  line-height: 1.15;
+  margin: 10px 0;
+}
+
+.region-picker-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin: 16px 0;
+  font-size: 0.84rem;
+}
+
+.region-picker-box select {
+  background: #1e1b18;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.84rem;
+}
+
+.price-display-card {
+  background: rgba(212, 175, 106, 0.08);
+  border: 1px solid rgba(212, 175, 106, 0.25);
+  border-radius: 14px;
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.price-display-card .price strong {
+  font-size: 2.2rem;
+  color: var(--gold);
+}
+
+.price-subtext {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.checkout-perks-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.checkout-perks-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.88rem;
+  color: #ded6c9;
+}
+
+.checkout-perks-list svg {
+  color: var(--gold);
+}
+
+.checkout-cta-btn {
+  margin-bottom: 12px;
+}
+
